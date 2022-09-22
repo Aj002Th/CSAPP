@@ -140,7 +140,8 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  // 不同时为零, 也不同时为一
+  return ~(~x & ~y) & ~(x & y);
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -149,7 +150,8 @@ int bitXor(int x, int y) {
  *   Rating: 1
  */
 int tmin(void) {
-  return 2;
+  // 最小的补码: 仅最高位为 1 
+  return 1<<31;
 }
 //2
 /*
@@ -160,7 +162,10 @@ int tmin(void) {
  *   Rating: 2
  */
 int isTmax(int x) {
-  return 2;
+  // 等于: X==Y = !(X ^ Y) = !bitXor = !(~(~x & ~y) & ~(x & y))
+  // 最大的补码: 仅最高位为 0
+  unsigned maxMask = ~(1 << 31);
+  return !(x ^ maxMask);
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -170,7 +175,12 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+  // 表示出奇数位的位模式,然后再用之前推出来的 等于
+  // 它这里的奇数指的是从高位开始算的, oddMask = 0xAAAAAAAA
+  unsigned oddMask = 0xAA  + (0xAA << 8);
+  oddMask = oddMask + (oddMask << 16);
+  x = x & oddMask;
+  return !(x ^ oddMask);
 }
 /* 
  * negate - return -x 
@@ -180,7 +190,8 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+  // 按位取反加一
+  return ~x + 1;
 }
 //3
 /* 
@@ -193,7 +204,12 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+  // 小于: a < b = a + (-b) < 0 = a + negate(b) < 0 = a + (~b) + 1 < 0 = a + (~b) + 1 是负数 = (a + ~b + 1) >> 31
+  // 这个小于有点缺陷, 只能判断同符号的数, 同时还要警惕int类型的右移是算术右移
+  // 0x30 : 0011 0000
+  // 0x39 : 0011 1001
+  // 倒数第二个十六进制数等于3, 倒数第一个十六进制数小于10, 其他十六进制位全是0
+  return (!((x >> 4) ^ 0x3)) & (((x & 0xF) + ~0xA + 1) >> 31);
 }
 /* 
  * conditional - same as x ? y : z 
@@ -203,7 +219,12 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  // 判断一个数是否为0: !!x
+  // 0 的补码是全0, 1 的补码是全1
+  // 用全零和全一来进行选择
+  unsigned flag = !!x;
+  unsigned mask = ~flag + 1;
+  return (mask & y) | (~mask & z);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -213,7 +234,18 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+  // 给之前的同符号小于补充不同符号的情况,然后和等于或起来即可
+  unsigned signx = (1 << 31) & x;
+  unsigned signy = (1 << 31) & y;
+
+  // 完整的小于: conditional((signx ^ signy), signx >> 31, (x + ~y + 1) >> 31)
+  // 注意int的算术右移
+  unsigned flag = !!(signx ^ signy);
+  unsigned mask = ~flag + 1;
+  unsigned less = (mask & (signx >> 31)) | (~mask & (((unsigned)x + ~y + 1) >> 31));
+  unsigned equal = !(x ^ y);
+
+  return less | equal;
 }
 //4
 /* 
@@ -225,7 +257,8 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+  // 只有 0 和最小值的补码相反数是自身
+  return ((x | (~x + 1)) >> 31) + 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -240,7 +273,41 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+  // 将问题转换为找到最高位的1的位数, 将结果 + 1(符号位)就是所需的结果
+  // 对于正数来说是找最高位的1, 对于负数来说就是找最高位的0, 所以对负数取反即可
+  unsigned ux = x;
+  if(ux >> 31) {
+    ux = ~ux;
+  }
+
+  // 因为不能使用循环, 暴力的方法就是从32位一位一位用掩码找, 但是这显然有点笨了
+  // 有个很妙的二分法
+  int cnt = 0;
+  if(!!(ux >> 16)) {
+    cnt += 16;
+    ux >>= 16;
+  }
+  if(!!(ux >> 8)) {
+    cnt += 8;
+    ux >>= 8;
+  }
+  if(!!(ux >> 4)) {
+    cnt += 4;
+    ux >>= 4;
+  }
+  if (!!(ux >> 2)) {
+    cnt += 2;
+    ux >>= 2;
+  }
+  if (!!(ux >> 1)) {
+    cnt += 1;
+    ux >>= 1;
+  }
+  if(!!ux) {
+    cnt += 1;
+  }
+  
+  return cnt + 1;
 }
 //float
 /* 
@@ -255,7 +322,18 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned float_twice(unsigned uf) {
-  return 2;
+  // 公式: float = s E M = -1*(s) * 2^E * M
+  // 取每个部分
+  unsigned s = uf & (1 << 31);
+  unsigned e = (uf & (0xff << 23)) >> 23;
+  unsigned m = uf & ~(0x1ff << 23);
+
+  // 普通情况把 E 加一即可, E = 0 和 255 要单独处理一下
+  if (e == 0) return s | (m << 1);
+  if (e == 255) return uf;
+  e++;
+  if (e == 255) return (e << 23) | s;
+  return s | m | (e << 23);
 }
 /* 
  * float_i2f - Return bit-level equivalent of expression (float) x
@@ -267,7 +345,56 @@ unsigned float_twice(unsigned uf) {
  *   Rating: 4
  */
 unsigned float_i2f(int x) {
-  return 2;
+  // 取每个部分
+  unsigned s = x & (1 << 31);
+  unsigned E = 0;
+  unsigned e = 0;
+  unsigned m = x;
+
+  // 0 直接返回
+  if(!x) return 0;
+  // 负数先转正数
+  if(s) {
+    m = ~m + 1;
+  }
+
+  // 统计 E, 计算 e
+  for (unsigned i = m; i ; i >>= 1) E++;
+  E--;
+  e = E + 127;
+
+  // 计算尾数 m
+  m = m & (~(1 << E)); // 去掉最高位的1
+  if (E < 24) {
+    m <<= (23 - E);
+  } else {
+    // 位移到能取的 23 位
+    unsigned left = 0;
+    while(E > 24) {
+      if(m & 1) left++; // 移出的位是1就说明有精度的丢失
+      m >>= 1;
+      E--;
+    }
+    // 留了一位来判断进位
+    unsigned carry = m & 1;
+    m >>= 1;
+
+    // 偶数舍入
+    if(carry) {
+      if(left)
+        m++;
+      else if(m & 1)
+        m++;
+    }
+
+    // 处理舍入完出现的进位
+    if(m & (1 << 23)) {
+      e++;
+      m &= ~(1 << 23) ; // 因为其实最前面还有一个1, 又进了一次位, 所以直接将进位抹除就好
+    }
+  }
+
+  return s | (e << 23) | m;
 }
 /* 
  * float_f2i - Return bit-level equivalent of expression (int) f
@@ -282,5 +409,26 @@ unsigned float_i2f(int x) {
  *   Rating: 4
  */
 int float_f2i(unsigned uf) {
-  return 2;
+  // 取每个部分
+  unsigned s = uf & (1 << 31);
+  unsigned e = (uf & (0xff << 23)) >> 23;
+  unsigned m = uf & ~(0x1ff << 23);
+
+  // 处理特殊情况
+  int E = e - 127;
+  if (E < 0) return 0;
+  if (E == 255 || E > 31) return 1 << 31;
+
+  // 计算结果
+  m |= (1 << 23); // 最高位补1
+  if(E > 23) m >>= (E - 23);
+  else m >>= (23 - E);
+
+  // 正负号
+  int ret = m;
+  if(s) {
+    ret *= -1;
+  }
+
+  return ret;
 }
