@@ -417,7 +417,7 @@ int float_f2i(unsigned uf) {
   // 处理特殊情况
   int E = e - 127;
   if (E < 0) return 0;
-  if (E == 255 || E > 31) return 1 << 31;
+  if (E > 31) return 1 << 31;
 
   // 计算结果
   m |= (1 << 23); // 最高位补1
